@@ -4,16 +4,21 @@
 #include <pthread.h>
 
 volatile unsigned long counter = 0;
+unsigned long limit = 0xFFFFFFFC;
 
-int thread_count; 
+int thread_count;
 
 void *counterThread(void *id)
 {
   int my_id = (int)id;
+  unsigned long i;
+  volatile unsigned long aux = 0;
+  for (i = my_id * (limit / thread_count); i < (my_id + 1) * (limit / thread_count); i++)
+  {
+    aux++;
+  }
 
-  fprintf(stdout, "Hello from thread %d (total of %d threads)\n");
-
-  return NULL;
+  return (void *)aux;
 }
 
 int main(int argc, char *argv[])
@@ -23,15 +28,28 @@ int main(int argc, char *argv[])
   thread_handles = malloc(thread_count * sizeof(pthread_t));
 
   struct timeval start, stop;
-
-  unsigned long limit = 0xFFFFFFFC;
-
-  unsigned long i;
-
+  int i;
   gettimeofday(&start, NULL);
+  
+  for (i = 0; i < thread_count; i++)
+  {
+    if (pthread_create(&thread_handles[i], NULL, counterThread, (void *)(i)) != 0)
+    {
+      fprintf(stderr, "Nao consegui criar a thread\n");
+      exit(-1);
+    }
+  }
+  /* JOIN */
+  // unsigned long ret;
+  void* ret;
+  for (i = 0; i < thread_count; i++)
+  {
+    pthread_join(thread_handles[i], ret);
+    fprintf(stderr,"PASSOU\n");
+    counter+= (unsigned long)ret;
+  }
 
-  for (i = 0; i < limit; i++)
-    counter++;
+  free(thread_handles);
 
   gettimeofday(&stop, NULL);
 

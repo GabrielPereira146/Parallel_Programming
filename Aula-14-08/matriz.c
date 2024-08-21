@@ -8,12 +8,21 @@ int thread_count;
 
 long int M[SIZE][SIZE];
 long int v1[SIZE], v2[SIZE];
+float rest; 
 
 void *multiMatrixThread(void *id)
 {
   int my_id = (int)id;
+ 
+  long t_bloco = (SIZE/thread_count);
+  long p_linha =  my_id * t_bloco;
+   if (my_id == thread_count - 1)
+   {
+      t_bloco += rest;
+   }
+   
 
-  for (int i = my_id * (SIZE/thread_count); i < (my_id + 1) * (SIZE/thread_count); i++)
+  for (int i = p_linha; i < p_linha + t_bloco; i++)
   {
     v2[i] = 0;
     for (int j = 0; j < SIZE; j++)
@@ -30,7 +39,7 @@ int main(int argc, char *argv[])
   pthread_t *thread_handles;
   thread_count = strtol(argv[1], NULL, 10);
   thread_handles = malloc(thread_count * sizeof(pthread_t));
-
+  rest = SIZE % thread_count;
   struct timeval start, stop;
 
   int i, j;
