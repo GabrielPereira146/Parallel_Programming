@@ -10,233 +10,197 @@
 #include <math.h>
 #include <sys/time.h>
 
-int min_distance;
-int nb_towns;
+// Variáveis globais
+int min_distance;  // Armazena a menor distância encontrada até o momento
+int nb_towns;      // Número de cidades (número de vértices no problema do Caixeiro Viajante)
 
+// Estrutura de dados que representa a matriz de distâncias
 typedef struct
 {
-    int to_town;
-    int dist;
+    int to_town;  // Cidade de destino
+    int dist;     // Distância até a cidade de destino
 } d_info;
 
+// Matriz de distâncias entre as cidades (adjacência)
 d_info **d_matrix;
+// Vetor que armazena a distância de cada cidade até a origem
 int *dist_to_origin;
 
 /**
- * Checks if a given town is present in the current path up to a specified depth.
+ * Função que verifica se uma cidade já foi visitada no caminho atual até um determinado nível.
  *
- * @param town The town to check for presence in the path.
- * @param depth The current depth of the path being explored.
- * @param path An array representing the sequence of towns visited so far.
- * @return 1 if the town is present in the path, otherwise 0.
+ * @param town A cidade a ser verificada.
+ * @param depth A profundidade do caminho que está sendo explorado (quantas cidades foram visitadas).
+ * @param path O vetor que armazena a sequência de cidades visitadas.
+ * @return 1 se a cidade foi visitada, 0 caso contrário.
  */
 int present(int town, int depth, int *path)
 {
     int i;
-    for (i = 0; i < depth; i++)
+    for (i = 0; i < depth; i++)  // Verifica se a cidade já está no caminho
         if (path[i] == town)
-            return 1;
-    return 0;
+            return 1;  // A cidade já foi visitada
+    return 0;  // A cidade não foi visitada
 }
 
 /**
- * Recursively explore all possible routes for the TSP.
+ * Função recursiva que explora todos os caminhos possíveis para o problema do Caixeiro Viajante.
  *
- * The tsp function is a recursive function that explores all possible routes
- * for the TSP. It takes as input the current depth of the path being explored,
- * the length of the path so far, and an array of length nb_towns to store
- * the sequence of towns visited so far.
- *
- * @param depth The current depth of the path being explored.
- * @param current_length The length of the path so far.
- * @param path An array of length nb_towns to store the sequence of towns
- *             visited so far.
+ * @param depth A profundidade do caminho atual (quantas cidades foram visitadas).
+ * @param current_length O comprimento atual do caminho (distância percorrida até o momento).
+ * @param path O vetor de cidades visitadas.
  */
 void tsp(int depth, int current_length, int *path)
 {
     int i;
-    if (current_length >= min_distance)
+    if (current_length >= min_distance)  // Se o comprimento atual for maior ou igual à distância mínima, aborta a busca
         return;
-    if (depth == nb_towns)
+    if (depth == nb_towns)  // Se todas as cidades foram visitadas
     {
-        current_length += dist_to_origin[path[nb_towns - 1]];
-        if (current_length < min_distance)
-            min_distance = current_length;
+        current_length += dist_to_origin[path[nb_towns - 1]];  // Adiciona a distância até a cidade de origem
+        if (current_length < min_distance)  // Se o comprimento do caminho é menor que o mínimo encontrado até agora
+            min_distance = current_length;  // Atualiza a distância mínima
     }
     else
     {
         int town, me, dist;
-        me = path[depth - 1];
-        for (i = 0; i < nb_towns; i++)
+        me = path[depth - 1];  // Última cidade visitada no caminho
+        for (i = 0; i < nb_towns; i++)  // Percorre todas as cidades para encontrar a próxima cidade a ser visitada
         {
-            town = d_matrix[me][i].to_town;
-            if (!present(town, depth, path))
+            town = d_matrix[me][i].to_town;  // Obtém a cidade de destino
+            if (!present(town, depth, path))  // Se a cidade ainda não foi visitada
             {
-                path[depth] = town;
-                dist = d_matrix[me][i].dist;
-#pragma omp task shared(min_distance)
-                tsp(depth + 1, current_length + dist, path);
+                path[depth] = town;  // Marca a cidade como visitada
+                dist = d_matrix[me][i].dist;  // Distância até a cidade de destino
+                tsp(depth + 1, current_length + dist, path);  // Chama recursivamente para o próximo nível
             }
         }
     }
 }
 
 /**
- * Heuristically initializes the distance matrix with the closest neighbor
- * to each town.
+ * Função heurística que inicializa a matriz de distâncias com o vizinho mais próximo para cada cidade.
  *
- * This function uses a greedy algorithm to find the closest neighbor to
- * each town and store it in the distance matrix. The result is a good
- * starting point for the TSP, but may not result in the best solution.
- *
- * @param x The x coordinates of each town.
- * @param y The y coordinates of each town.
+ * @param x Vetor com as coordenadas x das cidades.
+ * @param y Vetor com as coordenadas y das cidades.
  */
 void greedy_shortest_first_heuristic(int *x, int *y)
 {
     int i, j, k, dist;
-    int *tempdist;
+    int *tempdist;  // Vetor temporário para armazenar as distâncias
 
     tempdist = (int *)malloc(sizeof(int) * nb_towns);
-// Could be faster, albeit not as didactic.
-// Anyway, for tractable sizes of the problem it
-// runs almost instantaneously.
 
+    // Para cada cidade, encontra o vizinho mais próximo
     for (i = 0; i < nb_towns; i++)
     {
         for (j = 0; j < nb_towns; j++)
         {
-            int dx = x[i] - x[j];
-            int dy = y[i] - y[j];
-            tempdist[j] = dx * dx + dy * dy;
+            int dx = x[i] - x[j];  // Diferença nas coordenadas x
+            int dy = y[i] - y[j];  // Diferença nas coordenadas y
+            tempdist[j] = dx * dx + dy * dy;  // Distância quadrada (evita o cálculo da raiz quadrada no início)
         }
-#pragma omp for
-        for (j = 0; j < nb_towns; j++)
+        for (j = 0; j < nb_towns; j++)  // Encontra o vizinho mais próximo
         {
             int tmp = INT_MAX;
             int town = 0;
             for (k = 0; k < nb_towns; k++)
             {
-                if (tempdist[k] < tmp)
+                if (tempdist[k] < tmp)  // Se a distância for menor, atualiza
                 {
                     tmp = tempdist[k];
                     town = k;
                 }
             }
-            tempdist[town] = INT_MAX;
-            d_matrix[i][j].to_town = town;
-            dist = (int)sqrt(tmp);
-            d_matrix[i][j].dist = dist;
+            tempdist[town] = INT_MAX;  // Marca a cidade como visitada
+            d_matrix[i][j].to_town = town;  // Define a cidade de destino
+            dist = (int)sqrt(tmp);  // Calcula a distância real
+            d_matrix[i][j].dist = dist;  // Armazena a distância
             if (i == 0)
-                dist_to_origin[town] = dist;
+                dist_to_origin[town] = dist;  // Define a distância até a origem para o vizinho mais próximo
         }
     }
 
-    free(tempdist);
+    free(tempdist);  // Libera a memória alocada
 }
 
 /**
- * Initialize the TSP problem.
+ * Função de inicialização do problema do Caixeiro Viajante.
  *
- * Reads the number of towns and the coordinates of each town from standard
- * input, then allocates memory for the distance matrix and the vector of
- * distances to the origin, and initializes them using the greedy shortest
- * first heuristic.
- *
- * @return void
+ * Lê o número de cidades e as coordenadas de cada cidade a partir da entrada padrão,
+ * e inicializa a matriz de distâncias e o vetor de distâncias até a origem usando a heurística.
  */
 void init_tsp()
 {
     int i, st;
     int *x, *y;
 
-    min_distance = INT_MAX;
+    min_distance = INT_MAX;  // Inicializa a distância mínima com o valor máximo possível
     printf("Numero de Cidades: ");
-    st = scanf("%u", &nb_towns);
+    st = scanf("%u", &nb_towns);  // Lê o número de cidades
     if (st != 1)
-        exit(1);
+        exit(1);  // Se falhar na leitura, termina a execução
 
+    // Aloca a memória para a matriz de distâncias e o vetor de distâncias até a origem
     d_matrix = (d_info **)malloc(sizeof(d_info *) * nb_towns);
     for (i = 0; i < nb_towns; i++)
         d_matrix[i] = (d_info *)malloc(sizeof(d_info) * nb_towns);
     dist_to_origin = (int *)malloc(sizeof(int) * nb_towns);
 
-    x = (int *)malloc(sizeof(int) * nb_towns);
-    y = (int *)malloc(sizeof(int) * nb_towns);
+    x = (int *)malloc(sizeof(int) * nb_towns);  // Vetor de coordenadas x
+    y = (int *)malloc(sizeof(int) * nb_towns);  // Vetor de coordenadas y
 
     printf("Coordenadas das cidades:\n");
     for (i = 0; i < nb_towns; i++)
     {
         printf("Cidade %d: ", i);
-        st = scanf("%u %u", x + i, y + i);
+        st = scanf("%u %u", x + i, y + i);  // Lê as coordenadas das cidades
         if (st != 2)
-            exit(1);
+            exit(1);  // Se falhar na leitura, termina a execução
     }
 
-    greedy_shortest_first_heuristic(x, y);
+    greedy_shortest_first_heuristic(x, y);  // Aplica a heurística de vizinho mais próximo
 
-    free(x);
+    free(x);  // Libera a memória dos vetores de coordenadas
     free(y);
 }
 
 /**
- * Solve the TSP using the greedy shortest first heuristic.
+ * Função principal que resolve o problema do Caixeiro Viajante.
  *
- * This function initializes the TSP problem using the greedy shortest
- * first heuristic, and then uses a recursive function to explore all
- * possible routes for the TSP. It returns the minimum distance of the
- * routes found.
- *
- * @return The minimum distance of the routes found.
+ * Inicializa o problema e usa a função recursiva tsp para explorar todos os caminhos possíveis.
+ * Retorna a distância mínima encontrada.
  */
 int run_tsp()
 {
     int i, *path;
     struct timeval start, stop;
-    init_tsp();
-    gettimeofday(&start, NULL);
-    path = (int *)malloc(sizeof(int) * nb_towns);
-    path[0] = 0;
-#pragma omp single
-    tsp(1, 0, path);
+    init_tsp();  // Inicializa o problema do TSP
+    gettimeofday(&start, NULL);  // Registra o tempo de início
+    path = (int *)malloc(sizeof(int) * nb_towns);  // Aloca o vetor de caminhos
+    path[0] = 0;  // Começa o caminho pela cidade 0
 
-    free(path);
+    tsp(1, 0, path);  // Chama a função recursiva para explorar todos os caminhos
+
+    free(path);  // Libera a memória do vetor de caminhos
     for (i = 0; i < nb_towns; i++)
-        free(d_matrix[i]);
+        free(d_matrix[i]);  // Libera a memória da matriz de distâncias
     free(d_matrix);
-    gettimeofday(&stop, NULL);
+    gettimeofday(&stop, NULL);  // Registra o tempo de término
     double t = (((double)(stop.tv_sec) * 1000.0 + (double)(stop.tv_usec / 1000.0)) -
-                ((double)(start.tv_sec) * 1000.0 + (double)(start.tv_usec / 1000.0)));
+                ((double)(start.tv_sec) * 1000.0 + (double)(start.tv_usec / 1000.0)));  // Calcula o tempo decorrido
 
-    fprintf(stdout, "Tempo decorrido = %g ms\n", t);
-    return min_distance;
+    fprintf(stdout, "Tempo decorrido = %g ms\n", t);  // Exibe o tempo decorrido
+    return min_distance;  // Retorna a menor distância encontrada
 }
 
 /**
- * Main entry point of the TSP solver.
+ * Função principal do programa.
  *
- * This function reads the number of TSP instances from the standard input,
- * and then for each instance, it reads the number of towns and the
- * coordinates of the towns, and prints the minimum distance of a route
- * that visits all towns exactly once and returns to the origin.
- *
- * @param argc The number of command line arguments.
- * @param argv The command line arguments.
- * @return 0 if successful, -1 otherwise.
+ * Chama a função run_tsp para resolver o problema e imprime a solução.
  */
-int main(int argc, char **argv)
+int main()
 {
-
-#pragma omp parallel
-    {
-
-        int num_instances, st;
-        printf("Vezes que o problema deve ser resolvido: ");
-        st = scanf("%u", &num_instances);
-        if (st != 1)
-            exit(1);
-        while (num_instances-- > 0)
-            printf("%d\n", run_tsp());
-        return 0;
-    }
+    printf("Resultado: %d\n", run_tsp());  // Exibe a solução do problema
+    return 0;
 }
