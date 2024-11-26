@@ -190,7 +190,7 @@ int run_tsp()
     int i, *path;
     struct timeval start, stop;
     init_tsp();
-     gettimeofday(&start, NULL);
+    gettimeofday(&start, NULL);
     path = (int *)malloc(sizeof(int) * nb_towns);
     path[0] = 0;
 
